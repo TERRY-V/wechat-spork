@@ -11,6 +11,7 @@ import gevent
 from gevent import monkey
 
 listPageUrlFormat = 'http://chuansong.me/account/%s?start=0'
+taskQueue = Queue()
 
 def processAccountInfo(name_of_account):
     urls = []
