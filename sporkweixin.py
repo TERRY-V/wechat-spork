@@ -3,40 +3,57 @@
 from __future__ import print_function
 
 import argparse
+import os
 import sys
 import time
-from Queue import Queue
 
 import gevent
 from gevent import monkey
 
+from urllib2 import urlopen, URLError
+from Queue import Queue
+
+from __global_thread import MyThread
+
 listPageUrlFormat = 'http://chuansong.me/account/%s?start=0'
-taskQueue = Queue()
 
-def processAccountInfo(name_of_account):
-    urls = []
+def download(url):
+    try:
+        retval = urlopen(url, timeout=5).read()
+    except URLError:
+        retval = ('*** ERROR: invalid URL "%s"' % url)
+    finally:
+        return retval
+
+def consumer(urlQueue, nThread):
+    print('Consumer (%d) starts...' % nThread)
+    while not urlQueue.empty():
+        url = urlQueue.get(1)
+        print('Consumer (%d) gets the task: %s...' % (nThread, url))
+
+        retval = download(url)
+        if retval.startswith('***'):
+            print(retval, '...skipping parse')
+            continue
+        print('%s: %s bytes: %r' % (url, len(retval), retval[:30]))
+
+
+def start(name_of_account):
+    urlQueue = Queue()
     listPageUrl = listPageUrlFormat % (name_of_account)
-    urls.append(listPageUrl)
+    urlQueue.put(listPageUrl)
 
-def consumer(nThread):
-    print 'Consumer (%d) starts...' % nThread
-    while True:
-        url = urlQueue[nThread-1].get(1)
-        print 'Consumer (%d) gets an task...' % nThread
-
-def start():
     funcs = []
     threads = []
+    consumer_num = 1
 
-    consumer_num = 8
-
-    for i in range consumer_num:
+    for i in range(consumer_num):
         funcs.append(consumer)
 
     nfuncs = range(len(funcs))
 
     for i in nfuncs:
-        t = MyThread(funcs[i], (queues, i), funcs[i].__name__)
+        t = MyThread(funcs[i], (urlQueue, i), funcs[i].__name__)
         threads.append(t)
 
     for i in nfuncs:
@@ -54,7 +71,7 @@ def main():
     args = parser.parse_args()
 
     if args.name_of_account:
-        processAccountInfo(args.name_of_account)
+        start(args.name_of_account)
     elif args.name_of_file:
         pass
 
