@@ -10,7 +10,10 @@ import time
 import gevent
 from gevent import monkey
 
+import urllib2
 from urllib2 import urlopen, URLError
+
+import Queue
 from Queue import Queue
 
 from __global_thread import MyThread
@@ -18,12 +21,17 @@ from __global_thread import MyThread
 listPageUrlFormat = 'http://chuansong.me/account/%s?start=0'
 
 def download(url):
+    request = urllib2.Request(url)
+    request.add_header('User-agent', 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)')
     try:
-        retval = urlopen(url, timeout=5).read()
-    except URLError:
-        retval = ('*** ERROR: invalid URL "%s"' % url)
+        reply = urllib2.urlopen(request, timeout=5).read()
+    except URLError, e:
+        print(e.getcode(), e.geturl(), e.reason)
+        print(e.info())
+        print(e.read())
+        reply = ('*** ERROR: invalid URL "%s"' % url)
     finally:
-        return retval
+        return reply
 
 def consumer(urlQueue, nThread):
     print('Consumer (%d) starts...' % nThread)
@@ -31,12 +39,11 @@ def consumer(urlQueue, nThread):
         url = urlQueue.get(1)
         print('Consumer (%d) gets the task: %s...' % (nThread, url))
 
-        retval = download(url)
-        if retval.startswith('***'):
-            print(retval, '...skipping parse')
+        reply = download(url)
+        if reply.startswith('***'):
+            print(reply, '...skipping parse')
             continue
-        print('%s: %s bytes: %r' % (url, len(retval), retval[:30]))
-
+        print('%s: %s bytes: %r...' % (url, len(reply), reply[:30]))
 
 def start(name_of_account):
     urlQueue = Queue()
