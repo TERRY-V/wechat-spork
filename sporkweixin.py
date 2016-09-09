@@ -13,11 +13,15 @@ from gevent import monkey
 import urllib2
 from urllib2 import urlopen, URLError
 
+from bs4 import BeautifulSoup
+from urlparse import urlparse, urljoin
+
 import Queue
 from Queue import Queue
 
 from __global_thread import MyThread
 
+domainUrl = 'http://chuansong.me'
 listPageUrlFormat = 'http://chuansong.me/account/%s?start=0'
 
 def download(url):
@@ -43,7 +47,16 @@ def consumer(urlQueue, nThread):
         if reply.startswith('***'):
             print(reply, '...skipping parse')
             continue
-        print('%s: %s bytes: %r...' % (url, len(reply), reply[:30]))
+
+        soup = BeautifulSoup(reply, "html.parser")
+        for link in soup.select(".pagedlist_item a[class='question_link']"):
+            link = link.get('href')
+            if link[:4] != 'http' and link.find(r'://') == -1:
+                link = urljoin(url, link)
+            urlQueue.put(link)
+            print(link)
+
+        time.sleep(1)
 
 def start(name_of_account):
     urlQueue = Queue()
