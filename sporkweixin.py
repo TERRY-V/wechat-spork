@@ -8,6 +8,8 @@ import re
 import sys
 import time
 
+import hashlib
+
 import gevent
 from gevent import monkey
 
@@ -39,6 +41,14 @@ def download(url):
     finally:
         return reply
 
+def md5(srcstr):
+    md5Str = hashlib.md5(srcstr).hexdigest()[:-16]
+    hexList = []
+    for i in range(0, len(md5Str), 2):
+        hexList.append(md5Str[i:i+2])
+    md5Num = str(long(''.join(hexList[::-1]), 16))
+    return md5Num
+
 def consumer(urlQueue, nThread):
     print('Consumer (%d) starts...' % nThread)
     while not urlQueue.empty():
@@ -51,34 +61,37 @@ def consumer(urlQueue, nThread):
             continue
 
         soup = BeautifulSoup(reply, "html.parser")
+        selectorDict = {}
+
+        selectorDict['base'] = {}
+        selectorDict['basic'] = {}
+        selectorDict['links'] = []
+
+        selectorDict['base']['website'] = settings.siteName
+        selectorDict['base']['srcid'] = md5(url)
+        selectorDict['base']['srclink'] = url
+
         for pattern in settings.urlPatterns:
             if re.match(pattern['url'], url) is not None:
-                print(pattern['url'])
+                if settings.DEBUG:
+                    print(pattern['url'])
+
                 for key in pattern['selector'].keys():
-                    print(key, pattern['selector'][key])
-
-                    for link in soup.select(pattern['selector'][key]):
-                        link = link.get('href')
-                        if link[:4] != 'http' and link.find(r'://') == -1:
-                            link = urljoin(url, link)
-                        urlQueue.put(link)
-                        print("URL", link, 'adds to queue, size is', urlQueue.qsize())
+                    if key == 'link':
+                        for link in soup.select(pattern['selector'][key]):
+                            link = link.get('href')
+                            if link[:4] != 'http' and link.find(r'://') == -1:
+                                link = urljoin(url, link)
+                            print(link)
+                            selectorDict['links'].append(link)
+                    else:
+                        selectorDict['basic'][key] = ''
 
         '''
-        for link in soup.select(".pagedlist_item a[class='question_link']"):
-            link = link.get('href')
-            if link[:4] != 'http' and link.find(r'://') == -1:
-                link = urljoin(url, link)
-            urlQueue.put(link)
-            print("URL", link, 'adds to queue, size is', urlQueue.qsize())
-
-        for pageLink in soup.select(".w4_5 span a"):
-            pageLink = pageLink.get('href')
-            if pageLink[:4] != 'http' and pageLink.find(r'://') == -1:
-                pageLink = urljoin(url, pageLink)
-            urlQueue.put(pageLink)
-            print("URL", pageLink, 'adds to queue, size is', urlQueue.qsize())
+        urlQueue.put(link)
+        print("URL", link, 'adds to queue, size is', urlQueue.qsize())
         '''
+        print(selectorDict)
 
         time.sleep(1)
 
