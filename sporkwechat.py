@@ -9,9 +9,7 @@ import sys
 import time
 
 import hashlib
-
-import gevent
-from gevent import monkey
+import json
 
 import urllib2
 from urllib2 import urlopen, URLError
@@ -77,21 +75,27 @@ def consumer(urlQueue, nThread):
                     print(pattern['url'])
 
                 for key in pattern['selector'].keys():
-                    if key == 'link':
+                    if key.startswith('links_'):
                         for link in soup.select(pattern['selector'][key]):
                             link = link.get('href')
                             if link[:4] != 'http' and link.find(r'://') == -1:
                                 link = urljoin(url, link)
-                            print(link)
                             selectorDict['links'].append(link)
                     else:
-                        selectorDict['basic'][key] = ''
+                        selectList = soup.select(pattern['selector'][key])
+                        if len(selectList):
+                            if key == 'content':
+                                selectorDict['basic'][key] = str(selectList[0])
+                            else:
+                                selectorDict['basic'][key] = selectList[0].string.strip()
+                        else:
+                            selectorDict['basic'][key] = ''
 
         '''
         urlQueue.put(link)
         print("URL", link, 'adds to queue, size is', urlQueue.qsize())
         '''
-        print(selectorDict)
+        print(json.dumps(selectorDict))
 
         time.sleep(1)
 

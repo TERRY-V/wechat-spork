@@ -39,13 +39,17 @@ urlPatterns = [
     {
         'url': r'http://chuansong.me/account/.*?', 
         'selector': {
-            'link': '.pagedlist_item a[class=\'question_link\']',
-            'link': '.w4_5 span a'
+            'links_1': '.pagedlist_item a[class=\'question_link\']',
+            'links_2': '.w4_5 > span > a'
         }
     },
     {
         'url': r'http://chuansong.me/n/.*?', 
         'selector': {
+            'title': '.rich_media_title',
+            'postdate': '#post-date',
+            'nickname': '.rich_media_meta_nickname',
+            'content': '.rich_media_content'
         }
     }
 ]
