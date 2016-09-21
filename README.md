@@ -1,5 +1,5 @@
-# wechat-spork
-=============
+wechat-spork
+============
 
 Wechat-spork is a simple python script for crawling wechat official account articles!
 
