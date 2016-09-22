@@ -10,6 +10,7 @@ import time
 
 import hashlib
 import json
+import threading
 
 import urllib2
 from urllib2 import urlopen, URLError
@@ -19,11 +20,28 @@ from Queue import Queue
 
 from bs4 import BeautifulSoup
 from random import randint
+from time import ctime
 from urlparse import urlparse, urljoin
 
 import settings
-from __global_thread import MyThread
 
+''' Threading module '''
+class MyThread(threading.Thread):
+    def __init__(self, func, args, name=''):
+        threading.Thread.__init__(self)
+        self.name=name
+        self.func=func
+        self.args=args
+        
+    def getResult(self):
+        return self.res
+
+    def run(self):
+        print('Starting', self.name, 'at:', ctime())
+        self.res=apply(self.func, self.args)
+        print(self.name, 'Finished at:', ctime())
+
+''' url downloading function '''
 def download(url):
     request = urllib2.Request(url)
     request.add_header('Referer', settings.domainHost)
@@ -39,6 +57,7 @@ def download(url):
     finally:
         return reply
 
+''' md5 '''
 def md5(srcstr):
     md5Str = hashlib.md5(srcstr).hexdigest()[:-16]
     hexList = []
