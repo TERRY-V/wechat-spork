@@ -26,7 +26,7 @@ from urlparse import urlparse, urljoin
 import settings
 
 ''' Threading module '''
-class MyThread(threading.Thread):
+class TaskThread(threading.Thread):
     def __init__(self, func, args, name=''):
         threading.Thread.__init__(self)
         self.name=name
@@ -40,6 +40,37 @@ class MyThread(threading.Thread):
         print('Starting', self.name, 'at:', ctime())
         self.res=apply(self.func, self.args)
         print(self.name, 'Finished at:', ctime())
+
+''' Task queue '''
+class TaskQueue(object):
+    def __init__(self, url, finishedUrls):
+        self.waitingUrls = [url]
+        self.finishedUrls = finishedUrls
+
+    def pop(self):
+        return self.waitingUrls.pop()
+
+    def append(self, url):
+        if url not in self.waitingUrls:
+            self.waitingUrls.append(url)
+
+    def feedback(self, url):
+        self.finishedUrls.append(url)
+
+    def size(self):
+        return len(self.waitingUrls)
+
+    def backupWaitingUrls(self):
+        f = open('waitingUrls.conf', 'w')
+        for url in self.waitingUrls:
+            f.write(url + '\n')
+        f.close()
+
+    def backupFinishedUrls(self):
+        f = open('finishedUrls.conf', 'w')
+        for url in self.finishedUrls:
+            f.write(url + '\n')
+        f.close()
 
 ''' url downloading function '''
 def download(url):
@@ -66,65 +97,77 @@ def md5(srcstr):
     md5Num = str(long(''.join(hexList[::-1]), 16))
     return md5Num
 
+''' html parser '''
+def parse(url, html):
+    selectorDict = {}
+
+    selectorDict['base'] = {}
+    selectorDict['basic'] = {}
+    selectorDict['links'] = []
+
+    selectorDict['base']['website'] = settings.siteName
+    selectorDict['base']['srcid'] = md5(url)
+    selectorDict['base']['srclink'] = url
+
+    for pattern in settings.urlPatterns:
+        if re.match(pattern['url'], url) is not None:
+            selectorDict['store'] = pattern['store']
+            
+            soup = BeautifulSoup(html, "html.parser")
+            for key in pattern['selector'].keys():
+                if key.startswith('links_'):
+                    for link in soup.select(pattern['selector'][key]):
+                        link = link.get('href')
+                        if link[:4] != 'http' and link.find(r'://') == -1:
+                            link = urljoin(url, link)
+                        selectorDict['links'].append(link)
+                else:
+                    selectList = soup.select(pattern['selector'][key])
+                    if len(selectList) and key == 'content':
+                        selectorDict['basic'][key] = str(selectList[0])
+                    elif len(selectList):
+                        selectorDict['basic'][key] = selectList[0].string.strip()
+                    else:
+                        selectorDict['basic'][key] = ''
+            break
+
+    return selectorDict
+
+''' save article '''
+def save(article):
+    f = open('artile.dat', 'a')
+    f.write(article + '\n')
+    f.close()
+
 def consumer(urlQueue, nThread):
     print('Consumer (%d) starts...' % nThread)
-    while not urlQueue.empty():
-        url = urlQueue.get(1)
-        print('Consumer (%d) gets the task: %s...' % (nThread, url))
+    while urlQueue.size():
+        url = urlQueue.pop()
+        print('Consumer (%d) gets the task: %s, (%s) tasks remained...' % (nThread, url, urlQueue.size()))
 
         reply = download(url)
         if reply.startswith('***'):
             print(reply, '...skipping parse')
             continue
 
-        soup = BeautifulSoup(reply, "html.parser")
-        selectorDict = {}
+        urlQueue.feedback(url)
 
-        selectorDict['base'] = {}
-        selectorDict['basic'] = {}
-        selectorDict['links'] = []
+        selectorDict = parse(url, reply)
+        if selectorDict['store']:
+            save(json.dumps(selectorDict))
 
-        selectorDict['base']['website'] = settings.siteName
-        selectorDict['base']['srcid'] = md5(url)
-        selectorDict['base']['srclink'] = url
+        for link in selectorDict['links']:
+            urlQueue.append(link)
 
-        for pattern in settings.urlPatterns:
-            if re.match(pattern['url'], url) is not None:
-                if settings.DEBUG:
-                    print(pattern['url'])
-
-                for key in pattern['selector'].keys():
-                    if key.startswith('links_'):
-                        for link in soup.select(pattern['selector'][key]):
-                            link = link.get('href')
-                            if link[:4] != 'http' and link.find(r'://') == -1:
-                                link = urljoin(url, link)
-                            selectorDict['links'].append(link)
-                    else:
-                        selectList = soup.select(pattern['selector'][key])
-                        if len(selectList):
-                            if key == 'content':
-                                selectorDict['basic'][key] = str(selectList[0])
-                            else:
-                                selectorDict['basic'][key] = selectList[0].string.strip()
-                        else:
-                            selectorDict['basic'][key] = ''
-
-        '''
-        urlQueue.put(link)
-        print("URL", link, 'adds to queue, size is', urlQueue.qsize())
-        '''
-        print(json.dumps(selectorDict))
-
-        time.sleep(1)
+        if urlQueue.size():
+            time.sleep(settings.downloadInterval)
 
 def process(url):
-    urlQueue = Queue()
-    urlQueue.put(url)
-
     funcs = []
     threads = []
     consumer_num = 1
+
+    urlQueue = TaskQueue(url, [])
 
     for i in range(consumer_num):
         funcs.append(consumer)
@@ -132,7 +175,7 @@ def process(url):
     nfuncs = range(len(funcs))
 
     for i in nfuncs:
-        t = MyThread(funcs[i], (urlQueue, i), funcs[i].__name__)
+        t = TaskThread(funcs[i], (urlQueue, i), funcs[i].__name__)
         threads.append(t)
 
     for i in nfuncs:

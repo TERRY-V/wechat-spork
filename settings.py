@@ -5,7 +5,7 @@ import os
 
 # SECURITY WARNING: don't run with debug turned on in production!
 
-DEBUG = True
+DEBUG = False
 
 # Site name
 
@@ -18,6 +18,9 @@ domainHost = 'http://chuansong.me'
 # Starting url
 
 startingUrl = 'http://chuansong.me/account/love16po?start=0'
+
+# Crawling interval
+downloadInterval = 10
 
 # User-agent definition
 
@@ -37,11 +40,12 @@ userAgents = [
 
 urlPatterns = [
     {
-        'url': r'http://chuansong.me/account/.*?', 
+        'url': r'http://chuansong.me/account/.*?',
         'selector': {
             'links_1': '.pagedlist_item a[class=\'question_link\']',
             'links_2': '.w4_5 > span > a'
-        }
+        },
+        'store': False
     },
     {
         'url': r'http://chuansong.me/n/.*?', 
@@ -50,7 +54,8 @@ urlPatterns = [
             'postdate': '#post-date',
             'nickname': '.rich_media_meta_nickname',
             'content': '.rich_media_content'
-        }
+        },
+        'store': True
     }
 ]
 
